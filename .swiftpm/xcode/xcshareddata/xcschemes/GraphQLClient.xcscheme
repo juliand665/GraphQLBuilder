@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "GraphQLSourceGen"
-               BuildableName = "GraphQLSourceGen"
-               BlueprintName = "GraphQLSourceGen"
+               BlueprintIdentifier = "GraphQLClient"
+               BuildableName = "GraphQLClient"
+               BlueprintName = "GraphQLClient"
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
@@ -34,8 +34,7 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       launchStyle = "0"
-      useCustomWorkingDirectory = "YES"
-      customWorkingDirectory = "/Users/julian/Desktop/GraphQLBuilder/Sources/GraphQLClient"
+      useCustomWorkingDirectory = "NO"
       ignoresPersistentStateOnLaunch = "NO"
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
@@ -44,22 +43,12 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "GraphQLSourceGen"
-            BuildableName = "GraphQLSourceGen"
-            BlueprintName = "GraphQLSourceGen"
+            BlueprintIdentifier = "GraphQLClient"
+            BuildableName = "GraphQLClient"
+            BlueprintName = "GraphQLClient"
             ReferencedContainer = "container:">
          </BuildableReference>
       </BuildableProductRunnable>
-      <CommandLineArguments>
-         <CommandLineArgument
-            argument = "https://countries.trevorblades.com/graphql"
-            isEnabled = "YES">
-         </CommandLineArgument>
-         <CommandLineArgument
-            argument = "https://spacex-production.up.railway.app/"
-            isEnabled = "NO">
-         </CommandLineArgument>
-      </CommandLineArguments>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -71,9 +60,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "GraphQLSourceGen"
-            BuildableName = "GraphQLSourceGen"
-            BlueprintName = "GraphQLSourceGen"
+            BlueprintIdentifier = "GraphQLClient"
+            BuildableName = "GraphQLClient"
+            BlueprintName = "GraphQLClient"
             ReferencedContainer = "container:">
          </BuildableReference>
       </BuildableProductRunnable>

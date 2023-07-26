@@ -111,10 +111,15 @@ final class CodeGenerator {
 	}
 	
 	func write() { write("") }
-	func write(_ part: some StringProtocol) {
-		for line in part.split(separator: "\n", omittingEmptySubsequences: false) {
-			print(indentation, terminator: "", to: &code)
-			print(line, to: &code)
+	func write(_ part: some StringProtocol, terminator: String = "\n") {
+		let lines = part.split(separator: "\n", omittingEmptySubsequences: false)
+		for (index, line) in lines.enumerated() {
+			if code.isEmpty || code.last == "\n" {
+				code += indentation
+			}
+			code += line
+			let isLastLine = index == lines.count - 1
+			code += isLastLine ? terminator : "\n"
 		}
 	}
 }
@@ -141,6 +146,10 @@ extension CodeGenerator {
 	}
 	
 	func writeCode(for type: TypeInfo) {
+		guard !type.name.hasPrefix("__") else {
+			print("skipping introspection type \(type.name)")
+			return
+		}
 		// TODO: deprecation?
 		// TODO: custom scalars
 		// TODO: interfaces
@@ -179,25 +188,30 @@ extension CodeGenerator {
 				let argDefs = field.args
 					.lazy
 					.map {
-						let defaultPart = $0.defaultValueSwift().map { " = \($0)" } ?? ""
+						let defaultPart = $0.requiresValue() ? "" : " = nil"
 						return "\($0.name): \($0.type.swiftName())\(defaultPart)"
 					}
 					.joined(separator: ", ")
 				let typeName = field.type.swiftName()
 				writeBlock("func \(field.name.escapedIfNeeded)(\(argDefs)) -> \(typeName)") {
-					let function = field.type.isScalar ? "scalar" : "object"
-					let argPass = field.args
-						.lazy
-						.map { #".init(name: "\#($0.name)", type: "\#($0.type.graphQLName())", value: \#($0.name))"# }
-						.joined(separator: ", ")
-					write(#"source.\#(function)(access: .init(key: "\#(key)", field: "\#(field.name)", args: [\#(argPass)]))"#)
+					let function = field.type.requiresSelection ? "object" : "scalar"
+					write(
+						#"source.\#(function)(access: .init(key: "\#(key)", field: "\#(field.name)", args: ["#,
+						terminator: field.args.isEmpty ? "" : "\n"
+					)
+					indent {
+						for arg in field.args {
+							write(#".init(name: "\#(arg.name)", type: "\#(arg.type.graphQLName())", value: \#(arg.name)),"#)
+						}
+					}
+					write(#"]))"#)
 				}
 			}
 		}
 	}
 	
 	func writeEnumCode(for type: TypeInfo) {
-		writeBlock("enum \(type.name): String, GraphQLScalar") {
+		writeBlock("enum \(type.name): String, GraphQLScalar, CaseIterable") {
 			for value in type.enumValues! {
 				writeAsInlineDocComment(value.description)
 				if value.name.contains(where: \.isLowercase) {
@@ -211,7 +225,7 @@ extension CodeGenerator {
 	}
 	
 	func writeInputObjectCode(for type: TypeInfo) {
-		writeBlock("struct \(type.name): InputObject") {
+		writeBlock("struct \(type.name): InputValue") {
 			for field in type.inputFields! {
 				writeAsInlineDocComment(field.description)
 				let fieldName = field.name.escapedIfNeeded
@@ -227,14 +241,8 @@ extension CodeGenerator {
 }
 
 extension InputValue {
-	func defaultValueSwift() -> String? {
-		if let defaultValue {
-			return defaultValue // FIXME: almost certainly not this simple
-		} else if type.kind != .nonNull {
-			return "nil"
-		} else {
-			return nil
-		}
+	func requiresValue() -> Bool {
+		defaultValue == nil && type.kind == .nonNull
 	}
 }
 
@@ -286,8 +294,17 @@ let generator = CodeGenerator()
 generator.write("import GraphQLBuilder")
 
 extension TypeReference {
-	var isScalar: Bool {
-		ofType?.isScalar ?? (kind == .scalar)
+	var requiresSelection: Bool {
+		if let ofType {
+			return ofType.requiresSelection
+		} else {
+			switch kind {
+			case .scalar, .enum:
+				return false
+			default:
+				return true
+			}
+		}
 	}
 }
 

@@ -54,7 +54,7 @@ extension CodeGenerator {
 			newLine()
 			writeLine("init(source: any DataSource) { self.source = source }")
 			
-			for (field, key) in zip(type.fields!, FieldKeys()) {
+			for field in type.fields! {
 				newLine()
 				writeAsInlineDocComment(field.description)
 				writePart("func \(escaping: field.name)(")
@@ -66,7 +66,7 @@ extension CodeGenerator {
 				}
 				writeBlock(") throws -> \(field.type.swiftName)") {
 					let function = field.type.requiresSelection ? "object" : "scalar"
-					writePart("try source.\(function)(access: .init(key: \(quoting: key), field: \(quoting: field.name), args: [")
+					writePart("try source.\(function)(access: .init(field: \(quoting: field.name), args: [")
 					writeMultiline {
 						for arg in field.args {
 							writeLine(".init(name: \(quoting: arg.name), type: \(quoting: arg.type.graphQLName), value: \(arg.name)),")

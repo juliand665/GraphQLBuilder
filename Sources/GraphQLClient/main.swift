@@ -12,7 +12,11 @@ let testQuery = try GraphQLQuery<Query, _> {
 	).map { continent in
 		let countries = try continent.countries()
 			.lazy
-			.map { try $0.name() }
+			.map { country in
+				let name = try country.name()
+				let french = try country.name(lang: "fr")
+				return "\(name)/\(french)"
+			}
 			.filter { $0.first == "A" }
 			.joined(separator: ", ")
 		return "\(try continent.name())'s A-countries: \(countries)"

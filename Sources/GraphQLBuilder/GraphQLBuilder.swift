@@ -80,18 +80,30 @@ extension GraphQLQuery {
 	}
 }
 
-struct GraphQLDecoder: DataSource {
+final class GraphQLDecoder: DataSource {
 	let tracker: FieldTracker
 	let container: KeyedDecodingContainer<StringKey>
+	var keys = FieldKeys()
+	var index = -1
+	
+	init(tracker: FieldTracker, container: KeyedDecodingContainer<StringKey>) {
+		self.tracker = tracker
+		self.container = container
+	}
+	
+	private func nextKey() -> StringKey {
+		index += 1
+		return .init(keys.nextKey())
+	}
 	
 	func scalar<Scalar: GraphQLScalar>(access: FieldAccess) throws -> Scalar {
-		try container.decode(Scalar.self, forKey: .init(access.key))
+		try container.decode(Scalar.self, forKey: nextKey())
 	}
 	
 	func object<Object: GraphQLDecodable>(access: FieldAccess) throws -> Object {
 		try container.decode(
-			Object.self, forKey: .init(access.key),
-			configuration: tracker.accesses[access.key]!.inner!
+			Object.self, forKey: nextKey(),
+			configuration: tracker.accesses[index].inner!
 		)
 	}
 }

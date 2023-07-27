@@ -2,8 +2,8 @@ import Foundation
 import CodeGenHelpers
 
 public protocol DataSource {
-	func scalar<Scalar: GraphQLScalar>(access: FieldAccess) -> Scalar
-	func object<Object: GraphQLDecodable>(access: FieldAccess) -> Object
+	func scalar<Scalar: GraphQLScalar>(access: FieldAccess) throws -> Scalar
+	func object<Object: GraphQLDecodable>(access: FieldAccess) throws -> Object
 }
 
 public struct GraphQLQuery<Query: GraphQLObject, Output> {
@@ -84,14 +84,12 @@ struct GraphQLDecoder: DataSource {
 	let tracker: FieldTracker
 	let container: KeyedDecodingContainer<StringKey>
 	
-	// TODO: error handling lol
-	
-	func scalar<Scalar: GraphQLScalar>(access: FieldAccess) -> Scalar {
-		try! container.decode(Scalar.self, forKey: .init(access.key))
+	func scalar<Scalar: GraphQLScalar>(access: FieldAccess) throws -> Scalar {
+		try container.decode(Scalar.self, forKey: .init(access.key))
 	}
 	
-	func object<Object: GraphQLDecodable>(access: FieldAccess) -> Object {
-		try! container.decode(
+	func object<Object: GraphQLDecodable>(access: FieldAccess) throws -> Object {
+		try container.decode(
 			Object.self, forKey: .init(access.key),
 			configuration: tracker.accesses[access.key]!.inner!
 		)

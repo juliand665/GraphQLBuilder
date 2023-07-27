@@ -64,9 +64,9 @@ extension CodeGenerator {
 						writePart(" = nil")
 					}
 				}
-				writeBlock(") -> \(field.type.swiftName)") {
+				writeBlock(") throws -> \(field.type.swiftName)") {
 					let function = field.type.requiresSelection ? "object" : "scalar"
-					writePart("source.\(function)(access: .init(key: \(quoting: key), field: \(quoting: field.name), args: [")
+					writePart("try source.\(function)(access: .init(key: \(quoting: key), field: \(quoting: field.name), args: [")
 					writeMultiline {
 						for arg in field.args {
 							writeLine(".init(name: \(quoting: arg.name), type: \(quoting: arg.type.graphQLName), value: \(arg.name)),")

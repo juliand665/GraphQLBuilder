@@ -30,14 +30,15 @@ guard response.errors?.isEmpty != false else {
 
 let schema = response.data!.schema
 
+print("generating swift code")
 let generator = CodeGenerator()
 
-generator.write("import GraphQLBuilder")
+generator.writeLine("import GraphQLBuilder")
 
 for type in schema.types {
 	generator.writeCode(for: type)
 }
 
-print()
-//print(code)
-try generator.code.write(toFile: "Schema.generated.swift", atomically: false, encoding: .utf8)
+let filename = "Schema.generated.swift"
+try generator.getCode().write(toFile: filename, atomically: false, encoding: .utf8)
+print("schema written to \(filename)")

@@ -4,15 +4,15 @@ import CodeGenHelpers
 extension CodeGenerator {
 	func writeAsMultilineDocComment(_ part: (some StringProtocol)?) {
 		guard let part else { return }
-		write("/**")
-		write(part)
-		write("*/")
+		writeLine("/**")
+		writeLines(of: part)
+		writeLine("*/")
 	}
 	
 	func writeAsInlineDocComment(_ part: (some StringProtocol)?) {
 		guard let part else { return }
 		indent(by: "/// ") {
-			write(part)
+			writeLines(of: part)
 		}
 	}
 	
@@ -28,7 +28,7 @@ extension CodeGenerator {
 		switch type.kind {
 		case .object:
 			// including metatypes in case people need them
-			write()
+			newLine()
 			writeAsMultilineDocComment(type.description)
 			writeObjectCode(for: type)
 		case .scalar:
@@ -36,11 +36,11 @@ extension CodeGenerator {
 			print("make sure you define this scalar yourself:")
 			print("- struct \(type.name): GraphQLScalar { ... }")
 		case .enum:
-			write()
+			newLine()
 			writeAsMultilineDocComment(type.description)
 			writeEnumCode(for: type)
 		case .inputObject:
-			write()
+			newLine()
 			writeAsMultilineDocComment(type.description)
 			writeInputObjectCode(for: type)
 		case let other:
@@ -50,33 +50,29 @@ extension CodeGenerator {
 	
 	func writeObjectCode(for type: TypeInfo) {
 		writeBlock("struct \(type.name): GraphQLObject") {
-			write("private var source: any DataSource")
-			write()
-			write("init(source: any DataSource) { self.source = source }")
+			writeLine("private var source: any DataSource")
+			newLine()
+			writeLine("init(source: any DataSource) { self.source = source }")
 			
 			for (field, key) in zip(type.fields!, FieldKeys()) {
-				write()
+				newLine()
 				writeAsInlineDocComment(field.description)
-				let argDefs = field.args
-					.lazy
-					.map {
-						let defaultPart = $0.requiresValue ? "" : " = nil"
-						return "\($0.name): \($0.type.swiftName)\(defaultPart)"
+				writePart("func \(escaping: field.name)(")
+				writeItems(in: field.args, separator: ", ") { arg in
+					writePart("\(arg.name): \(arg.type.swiftName)")
+					if !arg.requiresValue {
+						writePart(" = nil")
 					}
-					.joined(separator: ", ")
-				let typeName = field.type.swiftName
-				writeBlock("func \(field.name.escapedIfNeeded)(\(argDefs)) -> \(typeName)") {
+				}
+				writeBlock(") -> \(field.type.swiftName)") {
 					let function = field.type.requiresSelection ? "object" : "scalar"
-					write(
-						#"source.\#(function)(access: .init(key: "\#(key)", field: "\#(field.name)", args: ["#,
-						terminator: field.args.isEmpty ? "" : "\n"
-					)
-					indent {
+					writePart("source.\(function)(access: .init(key: \(quoting: key), field: \(quoting: field.name), args: [")
+					writeMultiline {
 						for arg in field.args {
-							write(#".init(name: "\#(arg.name)", type: "\#(arg.type.graphQLName)", value: \#(arg.name)),"#)
+							writeLine(".init(name: \(quoting: arg.name), type: \(quoting: arg.type.graphQLName), value: \(arg.name)),")
 						}
 					}
-					write(#"]))"#)
+					writeLine("]))")
 				}
 			}
 		}
@@ -87,10 +83,10 @@ extension CodeGenerator {
 			for value in type.enumValues! {
 				writeAsInlineDocComment(value.description)
 				if value.name.contains(where: \.isLowercase) {
-					write("case \(value.name.escapedIfNeeded)")
+					writeLine("case \(escaping: value.name)")
 				} else {
 					let camelCased = toCamelCase(screamingSnake: value.name)
-					write("case \(camelCased.escapedIfNeeded) = \"\(value.name)\"")
+					writeLine("case \(escaping: camelCased) = \(quoting: value.name)")
 				}
 			}
 		}
@@ -100,12 +96,11 @@ extension CodeGenerator {
 		writeBlock("struct \(type.name): InputValue") {
 			for field in type.inputFields! {
 				writeAsInlineDocComment(field.description)
-				let fieldName = field.name.escapedIfNeeded
 				let type = field.type.swiftName
 				if let defaultValue = field.defaultValue {
-					write("var \(fieldName): \(type) = \(defaultValue)")
+					writeLine("var \(escaping: field.name): \(type) = \(defaultValue)")
 				} else {
-					write("var \(fieldName): \(type)")
+					writeLine("var \(escaping: field.name): \(type)")
 				}
 			}
 		}
@@ -185,8 +180,8 @@ break, case, catch, continue, default, defer, do, else, fallthrough, for, guard,
 Any, as, await, catch, false, is, nil, rethrows, self, Self, super, throw, throws, true, try
 """.components(separatedBy: .whitespacesAndNewlines.union(.punctuationCharacters)))
 
-extension String {
-	var escapedIfNeeded: String {
-		keywords.contains(self) ? "`\(self)`" : self
+extension DefaultStringInterpolation {
+	mutating func appendInterpolation(escaping text: String) {
+		appendLiteral(keywords.contains(text) ? "`\(text)`" : text)
 	}
 }

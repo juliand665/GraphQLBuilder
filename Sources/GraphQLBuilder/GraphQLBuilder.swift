@@ -19,21 +19,9 @@ public struct GraphQLQuery<Query: GraphQLObject, Output> {
 		let (selectionCode, variables) = tracker.generateCode()
 		self.variables = variables
 		
-		let query = CodeGenerator()
-		query.write("query", terminator: "")
-		if !variables.isEmpty {
-			query.write("(")
-			query.indent {
-				for v in variables {
-					query.write("$\(v.key): \(v.type),")
-				}
-			}
-			query.write(")", terminator: "")
+		self.queryCode = CodeGenerator.generate {
+			$0.writeQuery(selectionCode, variables: variables)
 		}
-		query.writeBlock("") {
-			query.write(selectionCode.dropLast()) // drop trailing newline
-		}
-		self.queryCode = query.code
 	}
 	
 	public func makeRequest() -> GraphQLRequest {
@@ -45,52 +33,6 @@ struct Variable {
 	var key: String
 	var type: String
 	var value: any Encodable
-}
-
-extension FieldTracker {
-	func generateCode() -> (selection: String, variables: [Variable]) {
-		let selection = CodeGenerator()
-		let variables = VariableStorage()
-		selection.writeInputs(of: self, variables: variables)
-		return (selection.code, variables.variables)
-	}
-}
-
-private final class VariableStorage {
-	private(set) var variables: [Variable] = []
-	private var keys = FieldKeys()
-	
-	func register(_ argument: FieldAccess.Argument) -> String {
-		let key = keys.nextKey()
-		variables.append(.init(key: key, type: argument.type, value: argument.value))
-		return key
-	}
-}
-
-extension CodeGenerator {
-	fileprivate func writeInputs(of tracker: FieldTracker, variables: VariableStorage) {
-		for (access, inner) in tracker.accesses.values {
-			let args = access.args
-				.lazy
-				.map { arg in "\(arg.name): $\(variables.register(arg))" }
-				.joined(separator: ", ")
-			let argClause = args.isEmpty ? "" : "(\(args))"
-			let openBrace = inner == nil ? "" : " {"
-			write("\(access.key): \(access.field)\(argClause)\(openBrace)")
-			if let inner {
-				indent {
-					writeInputs(of: inner, variables: variables)
-				}
-				write("}")
-			}
-		}
-	}
-	
-	func writeBlock(_ header: some StringProtocol, contents: () -> Void) {
-		write("\(header) {")
-		indent(contents)
-		write("}")
-	}
 }
 
 public struct GraphQLRequest: Encodable {

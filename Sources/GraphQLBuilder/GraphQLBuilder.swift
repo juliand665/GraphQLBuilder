@@ -1,144 +1,9 @@
 import Foundation
-
-public protocol InputValue: Encodable {}
-
-public protocol GraphQLScalar: InputValue, Decodable {
-	static var mocked: Self { get }
-}
-
-extension String: GraphQLScalar {
-	public static let mocked = "<mocked>"
-}
-
-extension Int: GraphQLScalar {
-	public static let mocked = 0
-}
-
-extension Double: GraphQLScalar {
-	public static let mocked = 0.0
-}
-
-extension Bool: GraphQLScalar {
-	public static let mocked = false
-}
-
-extension Array: InputValue where Element: InputValue {}
-
-extension Array: GraphQLScalar where Element: GraphQLScalar {
-	public static var mocked: Self { [.mocked] }
-}
-
-public struct StringID {
-	public var rawValue: String
-}
-
-extension StringID: Codable {
-	public init(from decoder: Decoder) throws {
-		let container = try decoder.singleValueContainer()
-		self.rawValue = try container.decode(String.self)
-	}
-	
-	public func encode(to encoder: Encoder) throws {
-		var container = encoder.singleValueContainer()
-		try container.encode(rawValue)
-	}
-}
-
-extension StringID: GraphQLScalar {
-	public static let mocked = Self(rawValue: "<mocked>")
-}
-
-extension GraphQLScalar where Self: CaseIterable {
-	public static var mocked: Self { allCases.first! }
-}
-
-public protocol GraphQLValue: DecodableWithConfiguration where DecodingConfiguration == FieldTracker {
-	static func mocked(tracker: FieldTracker) -> Self
-}
-
-public protocol GraphQLObject: GraphQLValue {
-	init(source: any DataSource)
-}
-
-public extension GraphQLObject {
-	init(from decoder: Decoder, configuration: FieldTracker) throws {
-		self.init(source: DecodingDataSource(
-			tracker: configuration,
-			container: try decoder.container(keyedBy: StringKey.self)
-		))
-	}
-}
-
-public extension GraphQLObject {
-	static func mocked(tracker: FieldTracker) -> Self {
-		.init(source: tracker)
-	}
-}
-
-extension Array: GraphQLValue where Element: GraphQLValue {
-	public static func mocked(tracker: FieldTracker) -> Self {
-		[.mocked(tracker: tracker)] // a single value to make sure related code paths are used
-	}
-}
-
-extension Optional: GraphQLValue where Wrapped: GraphQLValue {
-	public static func mocked(tracker: FieldTracker) -> Optional<Wrapped> {
-		Wrapped.mocked(tracker: tracker)
-	}
-}
+import CodeGenHelpers
 
 public protocol DataSource {
 	func scalar<Scalar: GraphQLScalar>(access: FieldAccess) -> Scalar
-	func object<Object: GraphQLValue>(access: FieldAccess) -> Object
-}
-
-public final class FieldTracker: DataSource {
-	typealias TrackedAccess = (access: FieldAccess, inner: FieldTracker?)
-	
-	var accesses: [String: TrackedAccess] = [:]
-	
-	// TODO: enable multiple requests of the same property (e.g. with different args)
-	
-	private func registerAccess(_ access: FieldAccess, inner: FieldTracker? = nil, forKey key: String) {
-		assert(accesses[key] == nil, "already making a request for key \(access.field) as \(key)")
-		accesses[key] = (access, inner)
-	}
-	
-	public func scalar<Scalar: GraphQLScalar>(access: FieldAccess) -> Scalar {
-		registerAccess(access, forKey: access.key)
-		return .mocked
-	}
-	
-	public func object<Object: GraphQLValue>(access: FieldAccess) -> Object {
-		let tracker = Self()
-		registerAccess(access, inner: tracker, forKey: access.key)
-		return .mocked(tracker: tracker)
-	}
-}
-
-public struct FieldAccess {
-	var key: String
-	var field: String
-	var args: [Argument] = []
-	
-	public init(key: String, field: String, args: [Argument?] = []) {
-		self.key = key
-		self.field = field
-		self.args = args.compactMap { $0 }
-	}
-	
-	public struct Argument {
-		var name: String
-		var type: String
-		var value: any InputValue
-		
-		public init?(name: String, type: String, value: (any InputValue)?) {
-			guard let value else { return nil }
-			self.name = name
-			self.type = type
-			self.value = value
-		}
-	}
+	func object<Object: GraphQLDecodable>(access: FieldAccess) -> Object
 }
 
 public struct GraphQLQuery<Query: GraphQLObject, Output> {
@@ -151,22 +16,24 @@ public struct GraphQLQuery<Query: GraphQLObject, Output> {
 		self.get = get
 		
 		_ = try get(.init(source: tracker))
+		let (selectionCode, variables) = tracker.generateCode()
+		self.variables = variables
 		
-		let querySelection = CodeGenerator()
-		let variables = VariableStorage()
-		querySelection.writeInputs(of: tracker, variables: variables)
-		self.variables = variables.variables
-		
-		let queryCode = CodeGenerator()
-		// TODO: multiline if non-empty?
-		let variableDefs = variables.variables
-			.lazy
-			.map { "$\($0.key): \($0.type)" }
-			.joined(separator: ", ")
-		queryCode.writeBlock("query(\(variableDefs))") {
-			queryCode.write(querySelection.code.dropLast()) // drop trailing newline
+		let query = CodeGenerator()
+		query.write("query", terminator: "")
+		if !variables.isEmpty {
+			query.write("(")
+			query.indent {
+				for v in variables {
+					query.write("$\(v.key): \(v.type),")
+				}
+			}
+			query.write(")", terminator: "")
 		}
-		self.queryCode = queryCode.code
+		query.writeBlock("") {
+			query.write(selectionCode.dropLast()) // drop trailing newline
+		}
+		self.queryCode = query.code
 	}
 	
 	public func makeRequest() -> GraphQLRequest {
@@ -174,7 +41,22 @@ public struct GraphQLQuery<Query: GraphQLObject, Output> {
 	}
 }
 
-final class VariableStorage {
+struct Variable {
+	var key: String
+	var type: String
+	var value: any Encodable
+}
+
+extension FieldTracker {
+	func generateCode() -> (selection: String, variables: [Variable]) {
+		let selection = CodeGenerator()
+		let variables = VariableStorage()
+		selection.writeInputs(of: self, variables: variables)
+		return (selection.code, variables.variables)
+	}
+}
+
+private final class VariableStorage {
 	private(set) var variables: [Variable] = []
 	private var keys = FieldKeys()
 	
@@ -185,21 +67,12 @@ final class VariableStorage {
 	}
 }
 
-struct Variable {
-	var key: String
-	var type: String
-	var value: any Encodable
-}
-
 extension CodeGenerator {
-	func writeInputs(of tracker: FieldTracker, variables: VariableStorage) {
+	fileprivate func writeInputs(of tracker: FieldTracker, variables: VariableStorage) {
 		for (access, inner) in tracker.accesses.values {
 			let args = access.args
 				.lazy
-				.map {
-					let key = variables.register($0)
-					return "\($0.name): $\(key)"
-				}
+				.map { arg in "\(arg.name): $\(variables.register(arg))" }
 				.joined(separator: ", ")
 			let argClause = args.isEmpty ? "" : "(\(args))"
 			let openBrace = inner == nil ? "" : " {"
@@ -217,63 +90,6 @@ extension CodeGenerator {
 		write("\(header) {")
 		indent(contents)
 		write("}")
-	}
-}
-
-// TODO: share
-
-final class CodeGenerator {
-	var defaultIndent: String = "\t"
-	
-	var code = ""
-	
-	var indentation = ""
-	func indent(by change: String? = nil, _ block: () -> Void) {
-		let old = indentation
-		indentation += change ?? defaultIndent
-		block()
-		indentation = old
-	}
-	
-	func write() { write("") }
-	func write(_ part: some StringProtocol, terminator: String = "\n") {
-		let lines = part.split(separator: "\n", omittingEmptySubsequences: false)
-		for (index, line) in lines.enumerated() {
-			if code.isEmpty || code.last == "\n" {
-				code += indentation
-			}
-			code += line
-			let isLastLine = index == lines.count - 1
-			code += isLastLine ? terminator : "\n"
-		}
-	}
-}
-
-struct FieldKeys: Sequence, IteratorProtocol {
-	static let alphabet = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	
-	// digits of the current base-52 number, adding more as needed
-	var digits = [0]
-	
-	mutating func next() -> String? {
-		nextKey()
-	}
-	
-	mutating func nextKey() -> String {
-		defer { advance() }
-		return String(digits.reversed().lazy.map { Self.alphabet[$0] })
-	}
-	
-	private mutating func advance() {
-		for index in digits.indices {
-			digits[index] += 1
-			if digits[index] == Self.alphabet.count {
-				digits[index] = 0
-			} else {
-				return // no carry
-			}
-		}
-		digits.append(0)
 	}
 }
 
@@ -297,25 +113,32 @@ public struct GraphQLRequest: Encodable {
 }
 
 extension GraphQLQuery {
-	public func decodeOutput(from data: Data, using decoder: JSONDecoder?) throws -> Output {
-		let decoder = decoder ?? .init()
-		return try decoder.runDecoder(on: data) { decoder in
-			let container = try decoder.container(keyedBy: CodingKeys.self)
-			let query = Query(source: DecodingDataSource(
-				tracker: tracker,
-				container: try container.nestedContainer(keyedBy: StringKey.self, forKey: .data)
-			))
-			return try get(query)
-		}
+	public func decodeOutput(from data: Data, using decoder: JSONDecoder? = nil) throws -> Output {
+		try (decoder ?? .init())
+			.backportedDecode(Response.self, from: data, configuration: self).output
 	}
 	
-	private enum CodingKeys: String, CodingKey {
-		case data
-		case errors // TODO: handle
+	struct Response: DecodableWithConfiguration {
+		var output: Output
+		
+		init(from decoder: Decoder, configuration: GraphQLQuery) throws {
+			let container = try decoder.container(keyedBy: CodingKeys.self)
+			if let errors = try container.decodeIfPresent([GraphQLError].self, forKey: .errors) {
+				throw GraphQLErrors(errors: errors)
+			} else {
+				let query = try container.decode(Query.self, forKey: .data, configuration: configuration.tracker)
+				output = try configuration.get(query)
+			}
+		}
+		
+		private enum CodingKeys: CodingKey {
+			case data
+			case errors
+		}
 	}
 }
 
-struct DecodingDataSource: DataSource {
+struct GraphQLDecoder: DataSource {
 	let tracker: FieldTracker
 	let container: KeyedDecodingContainer<StringKey>
 	
@@ -325,31 +148,11 @@ struct DecodingDataSource: DataSource {
 		try! container.decode(Scalar.self, forKey: .init(access.key))
 	}
 	
-	func object<Object: GraphQLValue>(access: FieldAccess) -> Object {
-		let inner = tracker.accesses[access.key]!.inner!
-		return try! container.decode(Object.self, forKey: .init(access.key), configuration: inner)
-	}
-}
-
-// the right tool for this job would absolutely be DecodableWithConfiguration, but Apple only added that in 2023 (iOS 17, macOS 14), so we'd rather not require it. instead we'll use the ugly classic userInfo hack
-extension JSONDecoder {
-	private static let key = CodingUserInfoKey(rawValue: UUID().uuidString)!
-	
-	func runDecoder<T>(on data: Data, run block: (Decoder) throws -> T) throws -> T { // can't make this generic because of the nested type
-		try withoutActuallyEscaping(block) { block in
-			userInfo[Self.key] = block
-			defer { userInfo[Self.key] = nil }
-			return try decode(Content<T>.self, from: data).value
-		}
-	}
-	
-	private struct Content<T>: Decodable {
-		var value: T
-		
-		init(from decoder: Decoder) throws {
-			let block = decoder.userInfo[key]! as! (Decoder) throws -> T
-			value = try block(decoder)
-		}
+	func object<Object: GraphQLDecodable>(access: FieldAccess) -> Object {
+		try! container.decode(
+			Object.self, forKey: .init(access.key),
+			configuration: tracker.accesses[access.key]!.inner!
+		)
 	}
 }
 

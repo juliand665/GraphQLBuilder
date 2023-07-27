@@ -1,40 +1,5 @@
 import Foundation
 import GraphQLBuilder
-/*
-struct User: GraphQLObject {
-	private var source: any DataSource
-	
-	init(source: any DataSource) {
-		self.source = source
-	}
-	
-	func id() -> String {
-		source.scalar(access: .init(key: "a", field: "id"))
-	}
-	
-	func friends(minScore: Int = 0) -> [User] {
-		source.object(access: .init(key: "b", field: "friends", args: [.init(name: "minScore", type: "Int", value: minScore)]))
-	}
-}
-
-struct Query: GraphQLObject {
-	private var source: any DataSource
-	
-	init(source: any DataSource) {
-		self.source = source
-	}
-	
-	func user() -> User {
-		source.object(access: .init(key: "a", field: "user"))
-	}
-}
-
-let testQuery = GraphQLQuery<Query, _> {
-	let user = $0.user()
-	let friends = user.friends(minScore: 5).map { $0.id() }
-	return "user \(user.id()) with \(friends.count) friends"
-}
-*/
 
 let testQuery = GraphQLQuery<Query, _> {
 	let countries = $0.countries()
@@ -43,7 +8,7 @@ let testQuery = GraphQLQuery<Query, _> {
 		.joined(separator: "\n")
 	
 	let continents = $0.continents(
-		filter: .init(code: .init(nin: ["OC", "NA"]))
+		filter: .init(code: .init(nin: ["OC", "SA"]))
 	).map {
 		let countries = $0.countries()
 			.lazy

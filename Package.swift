@@ -12,26 +12,17 @@ let package = Package(
 			targets: ["GraphQLBuilder"]
 		),
 	],
-	dependencies: [
-		// Depend on the latest Swift 5.9 prerelease of SwiftSyntax
-		//.package(url: "https://github.com/apple/swift-syntax.git", from: "509.0.0-swift-DEVELOPMENT-SNAPSHOT-2023-07-10-a"),//"509.0.0-swift-5.9-DEVELOPMENT-SNAPSHOT-2023-04-25-b"),
-		.package(url: "https://github.com/apple/swift-syntax.git", revision: "swift-5.9-DEVELOPMENT-SNAPSHOT-2023-07-10-a"),
-	],
+	dependencies: [],
 	targets: [
-		.macro(
-			name: "GraphQLMacros",
-			dependencies: [
-				.product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-				.product(name: "SwiftCompilerPlugin", package: "swift-syntax")
-			]
-		),
+		.target(name: "CodeGenHelpers"),
 		.target(
 			name: "GraphQLBuilder",
-			dependencies: ["GraphQLMacros"]
+			dependencies: ["CodeGenHelpers"]
 		),
 		.executableTarget(name: "GraphQLClient", dependencies: ["GraphQLBuilder"]),
 		.executableTarget(
 			name: "GraphQLSourceGen",
+			dependencies: ["CodeGenHelpers"],
 			resources: [
 				.copy("introspect.gql"),
 			]

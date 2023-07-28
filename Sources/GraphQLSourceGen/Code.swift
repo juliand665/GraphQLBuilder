@@ -96,6 +96,11 @@ extension CodeGenerator {
 	func writeCode(for field: Field) {
 		newLine()
 		writeAsInlineDocComment(field.description)
+		for arg in field.args {
+			guard let description = arg.description else { continue }
+			let defaultPart = arg.defaultValue.map { " (Default: \($0))" } ?? ""
+			writeAsInlineDocComment("- Parameter \(arg.name): \(description)\(defaultPart)")
+		}
 		writePart("func \(escaping: field.name)(")
 		writeItems(in: field.args, separator: ", ") { arg in
 			writePart("\(arg.name): \(arg.type.swiftName)")

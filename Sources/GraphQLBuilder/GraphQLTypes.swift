@@ -64,15 +64,6 @@ public protocol GraphQLObject: GraphQLDecodable {
 }
 
 public extension GraphQLObject {
-	init(from decoder: Decoder, configuration: FieldTracker) throws {
-		self.init(source: GraphQLDecoder(
-			tracker: configuration,
-			container: try decoder.container(keyedBy: StringKey.self)
-		))
-	}
-}
-
-public extension GraphQLObject {
 	static func mocked(tracker: FieldTracker) -> Self {
 		.init(source: tracker)
 	}

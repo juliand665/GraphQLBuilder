@@ -24,8 +24,13 @@ public struct GraphQLQuery<Query: GraphQLObject, Output> {
 		}
 	}
 	
-	public func makeRequest() -> GraphQLRequest {
-		.init(query: queryCode, variables: variables)
+	public func makeRequest() -> some Encodable {
+		GraphQLRequest(query: queryCode, variables: variables)
+	}
+	
+	public func decodeOutput(from data: Data, using decoder: JSONDecoder? = nil) throws -> Output {
+		try (decoder ?? .init())
+			.backportedDecode(Response.self, from: data, configuration: self).output
 	}
 }
 
@@ -35,11 +40,11 @@ struct Variable {
 	var value: any Encodable
 }
 
-public struct GraphQLRequest: Encodable {
+struct GraphQLRequest: Encodable {
 	var query: String
 	var variables: [Variable] = []
 	
-	public func encode(to encoder: Encoder) throws {
+	func encode(to encoder: Encoder) throws {
 		var container = encoder.container(keyedBy: CodingKeys.self)
 		try container.encode(query, forKey: .query)
 		var varsContainer = container.nestedContainer(keyedBy: StringKey.self, forKey: .variables)
@@ -55,12 +60,7 @@ public struct GraphQLRequest: Encodable {
 }
 
 extension GraphQLQuery {
-	public func decodeOutput(from data: Data, using decoder: JSONDecoder? = nil) throws -> Output {
-		try (decoder ?? .init())
-			.backportedDecode(Response.self, from: data, configuration: self).output
-	}
-	
-	struct Response: DecodableWithConfiguration {
+	private struct Response: DecodableWithConfiguration {
 		var output: Output
 		
 		init(from decoder: Decoder, configuration: GraphQLQuery) throws {
@@ -77,52 +77,6 @@ extension GraphQLQuery {
 			case data
 			case errors
 		}
-	}
-}
-
-final class GraphQLDecoder: DataSource {
-	let tracker: FieldTracker
-	let container: KeyedDecodingContainer<StringKey>
-	var keys = FieldKeys()
-	var index = -1
-	
-	init(tracker: FieldTracker, container: KeyedDecodingContainer<StringKey>) {
-		self.tracker = tracker
-		self.container = container
-	}
-	
-	private func nextKey() -> StringKey {
-		index += 1
-		return .init(keys.nextKey())
-	}
-	
-	func scalar<Scalar: GraphQLScalar>(access: FieldAccess) throws -> Scalar {
-		try container.decode(Scalar.self, forKey: nextKey())
-	}
-	
-	func object<Object: GraphQLDecodable>(access: FieldAccess) throws -> Object {
-		try container.decode(
-			Object.self, forKey: nextKey(),
-			configuration: tracker.accesses[index].inner!
-		)
-	}
-}
-
-struct StringKey: CodingKey {
-	var stringValue: String
-	
-	var intValue: Int? { nil }
-	
-	init(_ string: String) {
-		self.stringValue = string
-	}
-	
-	init?(stringValue: String) {
-		self.init(stringValue)
-	}
-	
-	init?(intValue: Int) {
-		fatalError()
 	}
 }
 

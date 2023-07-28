@@ -87,4 +87,24 @@ public struct GraphQLErrors: Error {
 
 public struct GraphQLError: Decodable, Error {
 	public var message: String
+	public var path: [PathSegment]?
+	public var locations: [Location]?
+	
+	public struct Location: Decodable {
+		var line, column: Int
+	}
+	
+	public enum PathSegment: Decodable {
+		case field(String)
+		case index(Int)
+		
+		public init(from decoder: Decoder) throws {
+			let container = try decoder.singleValueContainer()
+			if let index = try? container.decode(Int.self) {
+				self = .index(index)
+			} else {
+				self = .field(try container.decode(String.self))
+			}
+		}
+	}
 }

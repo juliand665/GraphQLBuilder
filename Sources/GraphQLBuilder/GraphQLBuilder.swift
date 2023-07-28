@@ -4,6 +4,7 @@ import CodeGenHelpers
 public protocol DataSource {
 	func scalar<Scalar: GraphQLScalar>(access: FieldAccess) throws -> Scalar
 	func object<Object: GraphQLDecodable>(access: FieldAccess) throws -> Object
+	func cast<T: GraphQLObject>(to typeName: String) throws -> T?
 }
 
 public struct GraphQLQuery<Query: GraphQLObject, Output> {

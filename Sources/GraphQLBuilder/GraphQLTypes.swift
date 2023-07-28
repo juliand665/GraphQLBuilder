@@ -20,11 +20,26 @@ extension StringID: Codable {
 /// A value that can be used as argument to a field access in a query.
 public protocol InputValue: Encodable {}
 
-extension Array: InputValue where Element: InputValue {}
-
 /// The leaves of the GraphQL type system—you do not define a selection of fields for these, and they can be passed as input values as well.
 public protocol GraphQLScalar: InputValue, Decodable {
 	static var mocked: Self { get }
+}
+
+public protocol GraphQLDecodable: DecodableWithConfiguration where DecodingConfiguration == FieldTracker {
+	static func mocked(tracker: FieldTracker) -> Self
+}
+
+public protocol GraphQLObject: GraphQLDecodable {
+	init(source: any DataSource)
+}
+
+public protocol GraphQLInterface: GraphQLObject {}
+public protocol GraphQLUnion: GraphQLObject {}
+
+public extension GraphQLObject {
+	static func mocked(tracker: FieldTracker) -> Self {
+		.init(source: tracker)
+	}
 }
 
 extension String: GraphQLScalar {
@@ -43,10 +58,6 @@ extension Bool: GraphQLScalar {
 	public static let mocked = false
 }
 
-extension Array: GraphQLScalar where Element: GraphQLScalar {
-	public static var mocked: Self { [.mocked] }
-}
-
 extension StringID: GraphQLScalar {
 	public static let mocked = Self(rawValue: "<mocked>")
 }
@@ -55,18 +66,15 @@ extension GraphQLScalar where Self: CaseIterable {
 	public static var mocked: Self { allCases.first! }
 }
 
-public protocol GraphQLDecodable: DecodableWithConfiguration where DecodingConfiguration == FieldTracker {
-	static func mocked(tracker: FieldTracker) -> Self
+extension Array: InputValue where Element: InputValue {}
+extension Optional: InputValue where Wrapped: InputValue {}
+
+extension Array: GraphQLScalar where Element: GraphQLScalar {
+	public static var mocked: Self { [.mocked] }
 }
 
-public protocol GraphQLObject: GraphQLDecodable {
-	init(source: any DataSource)
-}
-
-public extension GraphQLObject {
-	static func mocked(tracker: FieldTracker) -> Self {
-		.init(source: tracker)
-	}
+extension Optional: GraphQLScalar where Wrapped: GraphQLScalar {
+	public static var mocked: Self { Wrapped.mocked }
 }
 
 extension Array: GraphQLDecodable where Element: GraphQLDecodable {

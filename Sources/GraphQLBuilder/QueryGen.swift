@@ -24,21 +24,27 @@ private final class VariableStorage {
 
 extension CodeGenerator {
 	fileprivate func writeInputs(of tracker: FieldTracker, variables: VariableStorage) {
-		for (key, (access, inner)) in zip(FieldKeys(), tracker.accesses) {
-			writePart("\(key): \(access.field)")
-			if !access.args.isEmpty {
-				let args = access.args
+		writeLine("_: __typename")
+		for access in tracker.accesses {
+			writePart("\(access.key): \(access.access.field)")
+			if !access.access.args.isEmpty {
+				let args = access.access.args
 					.lazy
 					.map { arg in "\(arg.name): $\(variables.register(arg))" }
 					.joined(separator: ", ")
 				writePart("(\(args))")
 			}
-			if let inner {
+			if let inner = access.inner {
 				writeBlock {
 					writeInputs(of: inner, variables: variables)
 				}
 			} else {
 				newLine()
+			}
+		}
+		for cast in tracker.casts {
+			writeBlock("... on \(cast.typeName)") {
+				writeInputs(of: cast.inner, variables: variables)
 			}
 		}
 	}

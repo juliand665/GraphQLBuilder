@@ -17,64 +17,101 @@ extension CodeGenerator {
 	}
 	
 	func writeCode(for type: TypeInfo) {
+		guard type.kind != .scalar else { return } // handled outside
 		guard !type.name.hasPrefix("__") else {
-			print("skipping introspection type \(type.name)")
+			log("skipping introspection type \(type.name)")
 			return
 		}
 		// TODO: deprecation?
-		// TODO: custom scalars
-		// TODO: interfaces
-		// TODO: unions
+		newLine()
+		writeAsMultilineDocComment(type.description)
 		switch type.kind {
 		case .object:
-			// including metatypes in case people need them
-			newLine()
-			writeAsMultilineDocComment(type.description)
 			writeObjectCode(for: type)
-		case .scalar:
-			guard !builtinScalars.keys.contains(type.name) else { return }
-			print("make sure you define this scalar yourself:")
-			print("- struct \(type.name): GraphQLScalar { ... }")
+		case .interface:
+			writeInterfaceCode(for: type)
+		case .union:
+			writeUnionCode(for: type)
 		case .enum:
-			newLine()
-			writeAsMultilineDocComment(type.description)
 			writeEnumCode(for: type)
 		case .inputObject:
-			newLine()
-			writeAsMultilineDocComment(type.description)
 			writeInputObjectCode(for: type)
-		case let other:
-			print("skipping other type \(type.name) of kind \(other)")
+		case .scalar:
+			fatalError("already handled above")
+		case .list, .nonNull:
+			fatalError("attempting to generate code for type modifier")
 		}
 	}
 	
 	func writeObjectCode(for type: TypeInfo) {
 		writeBlock("struct \(type.name): GraphQLObject") {
-			writeLine("private var source: any DataSource")
-			newLine()
-			writeLine("init(source: any DataSource) { self.source = source }")
+			writeDataSourceCode()
 			
 			for field in type.fields! {
-				newLine()
-				writeAsInlineDocComment(field.description)
-				writePart("func \(escaping: field.name)(")
-				writeItems(in: field.args, separator: ", ") { arg in
-					writePart("\(arg.name): \(arg.type.swiftName)")
-					if !arg.requiresValue {
-						writePart(" = nil")
-					}
-				}
-				writeBlock(") throws -> \(field.type.swiftName)") {
-					let function = field.type.requiresSelection ? "object" : "scalar"
-					writePart("try source.\(function)(access: .init(field: \(quoting: field.name), args: [")
-					writeMultiline {
-						for arg in field.args {
-							writeLine(".init(name: \(quoting: arg.name), type: \(quoting: arg.type.graphQLName), value: \(arg.name)),")
-						}
-					}
-					writeLine("]))")
+				writeCode(for: field)
+			}
+		}
+	}
+	
+	func writeInterfaceCode(for type: TypeInfo) {
+		writeBlock("struct \(type.name): GraphQLInterface") {
+			writeDataSourceCode()
+			
+			for field in type.fields! {
+				writeCode(for: field)
+			}
+			
+			for targetType in type.possibleTypes! {
+				writeDowncastCode(for: targetType)
+			}
+			
+			// TODO: allow downcasting to sub-interfaces?
+		}
+	}
+	
+	func writeUnionCode(for type: TypeInfo) {
+		writeBlock("struct \(type.name): GraphQLUnion") {
+			writeDataSourceCode()
+			
+			for targetType in type.possibleTypes! {
+				writeDowncastCode(for: targetType)
+			}
+		}
+	}
+	
+	func writeDataSourceCode() {
+		writeLine("private var _source: any DataSource")
+		newLine()
+		writeLine("init(source: any DataSource) { self._source = source }")
+	}
+	
+	func writeDowncastCode(for targetType: TypeReference) {
+		newLine()
+		let name = targetType.name!
+		writeBlock("func as\(name)() throws -> \(name)?") {
+			writeLine("try _source.cast(to: \(quoting: name))")
+		}
+	}
+	
+	func writeCode(for field: Field) {
+		newLine()
+		writeAsInlineDocComment(field.description)
+		writePart("func \(escaping: field.name)(")
+		writeItems(in: field.args, separator: ", ") { arg in
+			writePart("\(arg.name): \(arg.type.swiftName)")
+			if !arg.requiresValue {
+				writePart(" = nil")
+			}
+		}
+		writeBlock(") throws -> \(field.type.swiftName)") {
+			let function = field.type.requiresSelection ? "object" : "scalar"
+			writePart("try _source.\(function)(access: .init(field: \(quoting: field.name), args: [")
+			writeMultiline {
+				for arg in field.args {
+					writeLine(".init(name: \(quoting: arg.name), type: \(quoting: arg.type.graphQLName), value: \(arg.name)),")
 				}
 			}
+			writeLine("]))")
 		}
 	}
 	
@@ -98,7 +135,8 @@ extension CodeGenerator {
 				writeAsInlineDocComment(field.description)
 				let type = field.type.swiftName
 				if let defaultValue = field.defaultValue {
-					writeLine("var \(escaping: field.name): \(type) = \(defaultValue)")
+					writeAsInlineDocComment("Default Value: \(defaultValue)")
+					writeLine("var \(escaping: field.name): \(type) = nil")
 				} else {
 					writeLine("var \(escaping: field.name): \(type)")
 				}
@@ -107,7 +145,7 @@ extension CodeGenerator {
 	}
 }
 
-private let builtinScalars: [String: String] = [
+let builtinScalars: [String: String] = [
 	"Boolean": "Bool",
 	"Int": "Int",
 	"Float": "Double",

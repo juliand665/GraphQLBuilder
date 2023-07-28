@@ -56,6 +56,23 @@ struct Generate: AsyncParsableCommand {
 			for type in schema.types {
 				$0.writeCode(for: type)
 			}
+			
+			let requiredScalars: [String] = schema.types.lazy
+				.filter { $0.kind == .scalar && builtinScalars[$0.name] == nil }
+				.map(\.name)
+			if !requiredScalars.isEmpty {
+				log("")
+				log("This schema uses custom scalar types!")
+				log("Make sure you define these somewhere in your code:")
+				for scalar in requiredScalars {
+					log("struct \(scalar): GraphQLScalar { ... }")
+				}
+				if requiredScalars.contains("Date") {
+					log("For Date, instead of importing Foundation, you can re-export it with a typealias (or write your own if you're not using Foundation):")
+					log("typealias Date = Foundation.Date")
+				}
+				log("")
+			}
 		}
 		
 		let filename = "Schema.generated.swift"

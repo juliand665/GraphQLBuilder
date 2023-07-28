@@ -3,9 +3,9 @@ import CodeGenHelpers
 
 public extension GraphQLObject {
 	init(from decoder: Decoder, configuration: FieldTracker) throws {
-		self.init(source: GraphQLDecoder(
+		self.init(source: try GraphQLDecoder(
 			tracker: configuration,
-			container: try decoder.container(keyedBy: StringKey.self)
+			container: decoder.container(keyedBy: StringKey.self)
 		))
 	}
 }
@@ -13,30 +13,45 @@ public extension GraphQLObject {
 private final class GraphQLDecoder: DataSource {
 	let tracker: FieldTracker
 	let container: KeyedDecodingContainer<StringKey>
-	var keys = FieldKeys()
-	var index = -1
+	var index = 0
+	var castIndex = 0
 	
-	init(tracker: FieldTracker, container: KeyedDecodingContainer<StringKey>) {
+	var typeName: String
+	
+	init(tracker: FieldTracker, container: KeyedDecodingContainer<StringKey>) throws {
 		self.tracker = tracker
 		self.container = container
+		self.typeName = try container.decode(String.self, forKey: .init("_"))
 	}
 	
-	private func nextKey() -> StringKey {
-		index += 1
-		return .init(keys.nextKey())
+	private func nextAccess() -> TrackedAccess {
+		defer { index += 1 }
+		return tracker.accesses[index]
+	}
+	
+	private func nextCast() -> TrackedCast {
+		defer { castIndex += 1 }
+		return tracker.casts[index]
 	}
 	
 	// relying on these functions always being called in the same order
 	
 	func scalar<Scalar: GraphQLScalar>(access: FieldAccess) throws -> Scalar {
-		try container.decode(Scalar.self, forKey: nextKey())
+		try container.decode(Scalar.self, forKey: .init(nextAccess().key))
 	}
 	
 	func object<Object: GraphQLDecodable>(access: FieldAccess) throws -> Object {
-		try container.decode(
-			Object.self, forKey: nextKey(),
-			configuration: tracker.accesses[index].inner!
+		let access = nextAccess()
+		return try container.decode(
+			Object.self, forKey: .init(access.key),
+			configuration: access.inner!
 		)
+	}
+	
+	func cast<T: GraphQLObject>(to typeName: String) throws -> T? {
+		let cast = nextCast()
+		guard typeName == self.typeName else { return nil }
+		return .init(source: try Self(tracker: cast.inner, container: container))
 	}
 }
 

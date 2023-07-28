@@ -1,7 +1,6 @@
 import Foundation
 
 struct Schema: Codable {
-	var description: String?
 	var types: [TypeInfo]
 	var queryType: TypeName
 	var mutationType: TypeName?
@@ -66,7 +65,6 @@ struct Directive: Codable {
 	var description: String?
 	var locations: [Location]
 	var args: [InputValue]
-	var isRepeatable: Bool
 	
 	enum Location: String, Codable {
 		case query = "QUERY"

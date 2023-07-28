@@ -1,8 +1,8 @@
 # from https://github.com/graphql/graphql-js/blob/main/src/utilities/getIntrospectionQuery.ts
+# adjusted to work on older versions
 
 query IntrospectionQuery {
   schema: __schema {
-    description
     queryType { name }
     mutationType { name }
     subscriptionType { name }
@@ -12,7 +12,6 @@ query IntrospectionQuery {
     directives {
       name
       description
-      isRepeatable
       locations
       args {
         ...InputValue

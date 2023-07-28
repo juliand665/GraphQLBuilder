@@ -16,12 +16,17 @@ private final class GraphQLDecoder: DataSource {
 	var index = 0
 	var castIndex = 0
 	
-	var typeName: String
+	var _typeName: String?
+	func typeName() throws -> String {
+		if _typeName == nil {
+			_typeName = try container.decode(String.self, forKey: .init("_"))
+		}
+		return _typeName!
+	}
 	
 	init(tracker: FieldTracker, container: KeyedDecodingContainer<StringKey>) throws {
 		self.tracker = tracker
 		self.container = container
-		self.typeName = try container.decode(String.self, forKey: .init("_"))
 	}
 	
 	private func nextAccess() -> TrackedAccess {
@@ -50,7 +55,7 @@ private final class GraphQLDecoder: DataSource {
 	
 	func cast<T: GraphQLObject>(to typeName: String) throws -> T? {
 		let cast = nextCast()
-		guard typeName == self.typeName else { return nil }
+		guard try typeName == self.typeName() else { return nil }
 		return .init(source: try Self(tracker: cast.inner, container: container))
 	}
 }

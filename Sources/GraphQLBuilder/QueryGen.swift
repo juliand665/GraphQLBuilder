@@ -24,7 +24,9 @@ private final class VariableStorage {
 
 extension CodeGenerator {
 	fileprivate func writeInputs(of tracker: FieldTracker, variables: VariableStorage) {
-		writeLine("_: __typename")
+		if !tracker.casts.isEmpty {
+			writeLine("_: __typename")
+		}
 		for access in tracker.accesses {
 			writePart("\(access.key): \(access.access.field)")
 			if !access.access.args.isEmpty {

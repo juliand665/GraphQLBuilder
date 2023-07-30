@@ -48,13 +48,15 @@ struct Generate: AsyncParsableCommand {
 		}
 		
 		log("generating swift code")
-		let code = CodeGenerator.generate {
-			$0.writeLine("// Schema for \(serverURL.absoluteString)")
-			$0.newLine()
-			$0.writeLine("import GraphQLBuilder")
+		let code = CodeGenerator.generate { code in
+			code.writeLine("import GraphQLBuilder")
+			code.newLine()
+			code.writeLine("/// Schema for \(serverURL.absoluteString)")
 			
-			for type in schema.types {
-				$0.writeCode(for: type)
+			code.writeBlock("enum GraphQL") {
+				for type in schema.types {
+					code.writeCode(for: type)
+				}
 			}
 			
 			let requiredScalars: [String] = schema.types.lazy
@@ -71,6 +73,7 @@ struct Generate: AsyncParsableCommand {
 					log("For Date, instead of importing Foundation, you can re-export it with a typealias (or write your own if you're not using Foundation):")
 					log("typealias Date = Foundation.Date")
 				}
+				log("You can also nest these types in an extension of the GraphQL namespace enum that the generated code lives in.")
 				log("")
 			}
 		}

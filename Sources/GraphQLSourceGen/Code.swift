@@ -23,7 +23,9 @@ extension CodeGenerator {
 			return
 		}
 		// TODO: deprecation?
-		newLine()
+		if getCode().last != "{" {
+			newLine()
+		}
 		writeAsMultilineDocComment(type.description)
 		switch type.kind {
 		case .object:

@@ -25,15 +25,26 @@ public struct GraphQLQuery<Query: GraphQLObject, Output> {
 		}
 	}
 	
+	/// Creates an `Encodable` representation of this request for sending as an HTTP request's body.
 	public func makeRequest() -> some Encodable {
 		GraphQLRequest(query: queryCode, variables: variables)
 	}
 	
+	/// Prepares a ``URLRequest`` with the correct method, content type, and body for this request.
+	public func encodeRequest(to request: inout URLRequest, using encoder: JSONEncoder? = nil) throws {
+		request.httpMethod = "POST"
+		request.httpBody = try (encoder ?? .init()).encode(makeRequest())
+		request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+	}
+	
+	/// Parses received JSON output from the server's endpoint, gathering GraphQL errors into an instance of ``GraphQLErrors``.
 	public func decodeOutput(from data: Data, using decoder: JSONDecoder? = nil) throws -> Output {
 		try (decoder ?? .init())
 			.backportedDecode(Response.self, from: data, configuration: self).output
 	}
 }
+
+public typealias URLRequest = Foundation.URLRequest
 
 struct Variable {
 	var key: String
@@ -66,7 +77,7 @@ extension GraphQLQuery {
 		
 		init(from decoder: Decoder, configuration: GraphQLQuery) throws {
 			let container = try decoder.container(keyedBy: CodingKeys.self)
-			if let errors = try container.decodeIfPresent([GraphQLError].self, forKey: .errors) {
+			if let errors = try container.decodeIfPresent([GraphQLError].self, forKey: .errors), !errors.isEmpty {
 				throw GraphQLErrors(errors: errors)
 			} else {
 				let query = try container.decode(Query.self, forKey: .data, configuration: configuration.tracker)

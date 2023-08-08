@@ -17,6 +17,17 @@ extension StringID: Codable {
 	}
 }
 
+extension StringID {
+	@_disfavoredOverload
+	public func `as`<ID: RawRepresentable>(_: ID.Type = ID.self) -> ID? where ID.RawValue == String {
+		.init(rawValue: rawValue)
+	}
+	
+	public func `as`<ID: LosslessStringConvertible>(_: ID.Type = ID.self) -> ID? {
+		.init(rawValue)
+	}
+}
+
 /// A value that can be used as argument to a field access in a query.
 public protocol InputValue: Encodable {}
 
